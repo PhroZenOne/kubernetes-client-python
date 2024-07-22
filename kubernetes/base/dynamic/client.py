@@ -56,14 +56,15 @@ def meta_request(func):
         except ApiException as e:
             raise api_exception(e)
         if serialize_response:
+            data = resp.read()
             try:
                 if six.PY2:
-                    return serializer(self, json.loads(resp.data))
-                return serializer(self, json.loads(resp.data.decode('utf8')))
+                    return serializer(self, json.loads(data))
+                return serializer(self, json.loads(data.decode('utf8')))
             except ValueError:
                 if six.PY2:
-                    return resp.data
-                return resp.data.decode('utf8')
+                    return data
+                return data.decode('utf8')
         return resp
 
     return inner
@@ -264,31 +265,25 @@ class DynamicClient(object):
         # HTTP header `Content-Type`
         if params.get('content_type'):
             header_params['Content-Type'] = params['content_type']
-        else:
-            header_params['Content-Type'] = self.client.select_header_content_type(['*/*'])
 
         # Authentication setting
         auth_settings = ['BearerToken']
-
-        api_response = self.client.call_api(
-            path,
+        call_params = self.client.param_serialize(
             method.upper(),
+            path,
             path_params,
             query_params,
             header_params,
             body=body,
             post_params=form_params,
-            async_req=params.get('async_req'),
             files=local_var_files,
             auth_settings=auth_settings,
-            _preload_content=False,
-            _return_http_data_only=params.get('_return_http_data_only', True),
+        )
+        api_response = self.client.call_api(*call_params,
             _request_timeout=params.get('_request_timeout')
         )
-        if params.get('async_req'):
-            return api_response.get()
-        else:
-            return api_response
+        api_response.read()
+        return api_response
 
     def validate(self, definition, version=None, strict=False):
         """validate checks a kubernetes resource definition
